@@ -1,58 +1,30 @@
-from telethon import TelegramClient, events
-import asyncio
-import telebot_bot
-import keep_alive
-from keep_alive import keep_alive
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from transformers import pipeline
 
-keep_alive()
+# تحميل النموذج المُدرَّب
+model = pipeline("text-generation", model="./my_finetuned_model")
 
-# Replace these with your values from https://my.telegram.org/apps
-API_ID = '25140031'
-API_HASH = 'a9308e99598c9eee9889a1badf2ddd2f'
-PHONE_NUMBER = '+971569803058'
+# دالة للتعامل مع الأمر /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("مرحبًا! أنا بوت متخصص في البرمجة. كيف يمكنني مساعدتك؟")
 
-# Channel usernames (with or without @)
-SOURCE_CHANNEL = '@cointelegraph'
-TARGET_CHANNEL = '@crypto_N4'
+# دالة للتعامل مع الرسائل النصية
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_input = update.message.text
+    response = model(user_input, max_length=50, num_return_sequences=1)
+    await update.message.reply_text(response[0]['generated_text'])
 
-# Initialize the client
-client = TelegramClient('session_name', API_ID, API_HASH)
+# دالة رئيسية لتشغيل البوت
+def main():
+    application = Application.builder().token("YOUR_TOKEN").build()
 
-# Specify the word to remove from messages
-WORD_TO_REMOVE = "@Cointelegraph"  # Change this to the word you want to filter out
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-async def send_code():
-    try:
-        print("Sending code...")
-        await client.send_code_request(PHONE_NUMBER)
-        code = input('Enter the code you received: ')
-        await client.sign_in(PHONE_NUMBER, code)
-    except Exception as e:
-        print(f"Error during login: {e}")
+    application.run_polling()
 
-@client.on(events.NewMessage(chats=SOURCE_CHANNEL))
-async def send_message(event):
-    try:
-        # Modify the message by removing the specified word
-        modified_message = event.message.text.replace(WORD_TO_REMOVE, "")
-        await client.send_message(TARGET_CHANNEL, modified_message)
-        print(f"Sent message: {modified_message[:50]}...")
-    except Exception as e:
-        print(f"Error sending message: {e}")
+if __name__ == "__main__":
+    main()
 
-async def main():
-    # Start the client
-    await client.start()
-
-    # If not logged in, send code
-    if not await client.is_user_authorized():
-        await send_code()
-
-    print("Bot is running...")
-
-    # Keep the bot running
-    await client.run_until_disconnected()
-
-# Run the bot
-client.loop.run_until_complete(main())
-
+    
